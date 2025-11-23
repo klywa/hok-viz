@@ -15,6 +15,7 @@ class MatchRenderer:
         
         # Base dimensions
         base_map_size = 800
+        self.base_padding_top = 150
         # Set base panel width explicitly (narrower width, e.g. 280)
         self.base_panel_width = 280
         
@@ -94,8 +95,21 @@ class MatchRenderer:
             'ult_inactive': '#555555',
             'border_blue': '#1d4ed8',
             'border_red': '#b91c1c',
-            'border_player': '#22c55e'
+            'border_player': '#22c55e',
+            'buff_blue': '#3b82f6',
+            'buff_red': '#ef4444',
+            'buff_tyrant': '#eab308',
+            'buff_dragon': '#f59e0b'
         }
+        
+        # Load Invisible Icon
+        self.invisible_icon = None
+        try:
+            inv_path = os.path.join(self.assets_dir, "invisible.png")
+            if os.path.exists(inv_path):
+                self.invisible_icon = Image.open(inv_path)
+        except Exception as e:
+            print(f"Warning: Could not load invisible.png: {e}")
 
     def s(self, val):
         """Scale a value by the scale factor."""
@@ -109,7 +123,7 @@ class MatchRenderer:
         # Calculate Layout
         # Map Center
         map_x = (self.width - self.map_size) // 2
-        map_y = (self.height - self.map_size) // 2
+        map_y = self.s(self.base_padding_top)
         self.map_rect = (map_x, map_y, map_x + self.map_size, map_y + self.map_size)
         
         # Draw Base Map
@@ -325,7 +339,7 @@ class MatchRenderer:
         # Use the full available space for the panel, which is now tight
         panel_width = (self.width - self.map_size) // 2
         
-        start_y = self.s(150)
+        start_y = self.s(self.base_padding_top)
         spacing = self.s(150)
         
         # Left Panel (Blue)
@@ -385,6 +399,19 @@ class MatchRenderer:
                 icon = icon.convert('L') # Grayscale
             img.paste(icon, (x+self.s(10), y+self.s(10)))
             
+            # Overlay Invisible Icon
+            if not hero.is_visible and self.invisible_icon:
+                inv_icon = self.invisible_icon.resize((icon_size, icon_size), resample=Image.LANCZOS)
+                if inv_icon.mode != 'RGBA':
+                    inv_icon = inv_icon.convert('RGBA')
+                
+                # Adjust alpha for semi-transparency
+                r, g, b, a = inv_icon.split()
+                a = a.point(lambda i: i * 0.8) # 80% opacity
+                inv_icon.putalpha(a)
+                
+                img.paste(inv_icon, (x+self.s(10), y+self.s(10)), inv_icon)
+            
         # Name
         font_name = self._get_font(self.s(16))
         draw.text((x+self.s(80), y+self.s(10)), f"{hero.name} ({hero.player_name})", font=font_name, fill=self.colors['text_white'])
@@ -408,6 +435,35 @@ class MatchRenderer:
         ult_size = self.s(10)
         draw.ellipse((status_x, status_y, status_x+ult_size, status_y+ult_size), fill=ult_color)
         draw.text((status_x+self.s(12), status_y-self.s(2)), "Ult", font=font_small, fill="white")
+
+        # Buffs
+        current_status_x = status_x + self.s(35)
+        buff_size = self.s(10)
+        
+        for buff in hero.buffs:
+            b_color = 'white'
+            label = "?"
+            if "蓝" in buff:
+                b_color = self.colors['buff_blue']
+                label = "蓝"
+            elif "红" in buff:
+                b_color = self.colors['buff_red']
+                label = "红"
+            elif "暴君" in buff:
+                b_color = self.colors['buff_tyrant']
+                label = "暴"
+            elif "风暴" in buff or "龙" in buff:
+                b_color = self.colors['buff_dragon']
+                label = "龙"
+            
+            # Draw Circle
+            draw.ellipse((current_status_x, status_y, current_status_x + buff_size, status_y + buff_size), fill=b_color)
+            
+            # Draw Text
+            draw.text((current_status_x + buff_size + self.s(4), status_y - self.s(2)), label, font=font_small, fill=b_color)
+            
+            # Advance
+            current_status_x += self.s(28)
         
         # Items
         item_x = x + self.s(10)

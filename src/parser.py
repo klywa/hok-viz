@@ -19,6 +19,7 @@ class HeroStatus:
     items: List[str] = field(default_factory=list)
     has_ult: bool = False # "没有大招" -> False
     buffs: List[str] = field(default_factory=list)
+    is_visible: bool = True
 
 @dataclass
 class TowerStatus:
@@ -143,7 +144,7 @@ class MatchParser:
                 # Parse hero lines
                 # Format: <我方-玩家-廉颇>...
                 if line.startswith('<'):
-                    self._parse_hero_line(line, match_state)
+                    self._parse_hero_line(line, match_state, current_section)
             
             elif current_section == "防御塔与兵线状态":
                  self._parse_tower_minion_line(line, match_state, static_towers)
@@ -232,7 +233,7 @@ class MatchParser:
 
         return match_state
 
-    def _parse_hero_line(self, line: str, match_state: MatchState):
+    def _parse_hero_line(self, line: str, match_state: MatchState, section: str = None):
         # This is complex due to natural language. Regex is friend.
         # <我方-玩家-廉颇>
         name_match = re.match(r'<([^>]+)>', line)
@@ -246,6 +247,10 @@ class MatchParser:
         player_name = parts[1]
         hero_name = parts[-1]
 
+        is_visible = True
+        if section == "视野不可见的敌方英雄":
+            is_visible = False
+
         hero = HeroStatus(
             name=hero_name,
             player_name=player_name,
@@ -253,7 +258,8 @@ class MatchParser:
             role="",
             level=1,
             hp_percent=1.0,
-            mana_percent=1.0
+            mana_percent=1.0,
+            is_visible=is_visible
         )
         
         # Parse Role
@@ -312,9 +318,21 @@ class MatchParser:
                 pass
 
         # Parse Buffs
-        if "暴君buff" in line:
-            hero.buffs.append("暴君")
-        # Add more buffs if needed
+        # Limit scope to avoid matching location info like "在蓝buff野区"
+        sentences = line.split('。')
+        for sent in sentences:
+            # Skip location sentences usually containing "在...附近" or "坐标"
+            if "在" in sent and ("附近" in sent or "野区" in sent or "坐标" in sent):
+                continue
+            
+            if "蓝buff" in sent and "蓝buff" not in hero.buffs:
+                hero.buffs.append("蓝buff")
+            if "红buff" in sent and "红buff" not in hero.buffs:
+                hero.buffs.append("红buff")
+            if "暴君buff" in sent and "暴君buff" not in hero.buffs:
+                hero.buffs.append("暴君buff")
+            if "风暴龙王buff" in sent and "风暴龙王buff" not in hero.buffs:
+                hero.buffs.append("风暴龙王buff")
 
         # Parse Ult
         if "没有大招" in line:
