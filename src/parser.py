@@ -145,6 +145,8 @@ class MatchParser:
                 # Format: <我方-玩家-廉颇>...
                 if line.startswith('<'):
                     self._parse_hero_line(line, match_state, current_section)
+                elif current_section == "阵亡英雄" and "阵亡英雄：" in line:
+                    self._parse_dead_heroes_list(line, match_state)
             
             elif current_section == "防御塔与兵线状态":
                  self._parse_tower_minion_line(line, match_state, static_towers)
@@ -232,6 +234,30 @@ class MatchParser:
                                 ))
 
         return match_state
+
+    def _parse_dead_heroes_list(self, line: str, match_state: MatchState):
+        line = line.strip().strip('。')
+        if "：" not in line:
+            return
+        
+        prefix, content = line.split("：", 1)
+        
+        target_team = None
+        if "我方" in prefix:
+            target_team = "blue"
+        elif "敌方" in prefix:
+            target_team = "red"
+        
+        if not target_team or not content:
+            return
+            
+        dead_names = [n.strip() for n in content.split('、') if n.strip()]
+        
+        for hero in match_state.heroes:
+            if hero.team == target_team and hero.name in dead_names:
+                if not hero.is_dead:
+                    hero.is_dead = True
+                    hero.hp_percent = 0.0
 
     def _parse_hero_line(self, line: str, match_state: MatchState, section: str = None):
         # This is complex due to natural language. Regex is friend.
